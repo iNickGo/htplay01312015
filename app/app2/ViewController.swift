@@ -75,14 +75,16 @@ class ViewController: UIViewController,UIImagePickerControllerDelegate, UINaviga
     
     
     @IBAction func onClick(sender: AnyObject) {
-        if captureSession.canAddOutput(stillImageOutput) {
-            captureSession.addOutput(stillImageOutput)
-        }
         
 
         captureImage();
     }
     func captureImage() {
+        println("capturing image")
+        if captureSession.canAddOutput(stillImageOutput) {
+            captureSession.addOutput(stillImageOutput)
+        }
+        
         if  stillImageOutput == nil {
             return
         }
