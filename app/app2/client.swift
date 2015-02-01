@@ -14,7 +14,7 @@ import CoreLocation
 private let _SingletonASharedInstance = Client()
 
 
-let serverUrl = "192.168.1.106:8000"
+let serverUrl = "192.168.1.60:8000"
 
 class Client: NSObject, WebSocketDelegate{
     class var sharedInstance : Client {
@@ -62,6 +62,8 @@ class Client: NSObject, WebSocketDelegate{
     
     func websocketDidDisconnect(socket: Starscream.WebSocket, error: NSError?) {
         println("disconnect")
+        
+        self.socket.connect()
     }
     
     func websocketDidReceiveMessage(socket: Starscream.WebSocket, text: String) {
@@ -71,8 +73,7 @@ class Client: NSObject, WebSocketDelegate{
         switch json["cmd"].stringValue {
         case "requestImg":
             var view = self.view as ViewController
-            view.captureImage()
-            
+            view.captureImage(0)            
         default:
             print("n/a")
             

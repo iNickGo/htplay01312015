@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/tarm/goserial"
@@ -59,6 +60,7 @@ func main() {
 
 	go LaunghDeviceServer(localServerPort)
 	go readFromArduino()
+	go waitArudinoPIR()
 
 	origin := fmt.Sprintf("http://%v:%v/", remoteIP, remotePort)
 	endpoint := fmt.Sprintf("ws://%v:%v/", remoteIP, remotePort)
@@ -66,17 +68,27 @@ func main() {
 	for {
 		log.Println("connecting to server...")
 		conn, err := websocket.Dial(endpoint, "", origin)
-		log.Println("connected...")
+
 		if err != nil {
 			log.Printf("server connection fail:%v\n", err)
 			time.Sleep(time.Second * RECONN_TIMEOUT)
 			continue
 		}
 
+		log.Println("connected...")
 		gDeviceServer.RemoteConn = conn
-		waitingForNotification()
-		gDeviceServer.RemoteConn = nil
 
+		tmp := make([]byte, 100)
+		for {
+			//read nothing
+			//
+			_, err := conn.Read(tmp)
+			if err != nil {
+				break
+			}
+		}
+
+		//reconnect
 		time.Sleep(time.Second * RECONN_TIMEOUT)
 	}
 }
@@ -93,20 +105,22 @@ func readFromArduino() {
 			fmt.Printf("err: %v\n", err)
 			break
 		}
-		cmd := string(tmp[:n])
-		fmt.Printf("read from arduino %v %v\n", n, cmd)
+		data := string(tmp[:n])
+		fmt.Printf("read from arduino %v %v\n", n, data)
 
 		//notification anyway
-		if cmd == "PIR" {
+		if strings.Contains(data, "p1") {
+			fmt.Println("notification")
 			gPirNotification <- true
 		}
 	}
 }
 
-func waitingForNotification() {
+func waitArudinoPIR() {
 	for {
 		select {
 		case <-gPirNotification:
+			fmt.Println("send request camera img")
 			gDeviceServer.requestCameasImg()
 		case <-time.After(time.Second * 3):
 

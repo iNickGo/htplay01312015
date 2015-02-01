@@ -7,27 +7,34 @@ import (
 	"net/http"
 	"sync"
 
+	"code.google.com/p/go-uuid/uuid"
 	remotews "code.google.com/p/go.net/websocket"
 	"github.com/gorilla/websocket"
 )
 
+const (
+	IMG_TYPE_STREAMING = 0
+	IMG_TYPE_SNAPSHOT  = 1
+)
+
 type Login struct {
-	Cmd  string
-	Name string
+	Cmd  string `json:"cmd"`
+	Name string `json:"name"`
 }
 
 type UploadImg struct {
-	Cmd  string
-	Data string // base 64 encoded image data
+	Cmd  string `json:"cmd"`
+	Data string `json:"data"` // base 64 encoded image data
 }
 
 type RequestImg struct {
-	Cmd string
+	Cmd string `json:"cmd"`
 }
 
 type UploadImgToRemote struct {
 	Cmd     string `json:"cmd"`
 	ImgData string `json:"imgData"`
+	Name    string `json:"camID"`
 }
 
 type DeviceServer struct {
@@ -47,10 +54,10 @@ func LaunghDeviceServer(port int) {
 	if err != nil {
 		fmt.Printf("server started fail %v\n", err)
 	}
-
 }
 
 func deviceEntry(resp http.ResponseWriter, req *http.Request) {
+	log.Println("device connected")
 	var err error
 	var clientConn *websocket.Conn
 	clientConn, err = upgrader.Upgrade(resp, req, nil)
@@ -60,6 +67,8 @@ func deviceEntry(resp http.ResponseWriter, req *http.Request) {
 	}
 
 	log.Printf("client connected: %v\n", clientConn.RemoteAddr().String())
+	name := uuid.New()
+
 	for {
 		_, tmp, err := clientConn.ReadMessage()
 		if err != nil {
@@ -67,9 +76,10 @@ func deviceEntry(resp http.ResponseWriter, req *http.Request) {
 			gDeviceServer.clearDevice(clientConn)
 			break
 		}
-		log.Printf("read from client, msg: %v\n", string(tmp))
 
-		gDeviceServer.HandleCmd(clientConn, tmp)
+		//log.Printf("read from client, msg: %v\n", string(tmp))
+
+		gDeviceServer.HandleCmd(name, clientConn, tmp)
 	}
 }
 func (this *DeviceServer) requestCameasImg() {
@@ -96,7 +106,7 @@ func (this *DeviceServer) clearDevice(conn *websocket.Conn) {
 	}
 }
 
-func (this *DeviceServer) HandleCmd(conn *websocket.Conn, tmp []byte) {
+func (this *DeviceServer) HandleCmd(name string, conn *websocket.Conn, tmp []byte) {
 	req := make(map[string]interface{})
 	json.Unmarshal(tmp, &req)
 
@@ -107,24 +117,34 @@ func (this *DeviceServer) HandleCmd(conn *websocket.Conn, tmp []byte) {
 		return
 	}
 
+	fmt.Printf("read cmd: %v\n", cmd)
+
 	switch cmd {
 	case "login":
-		this.Login(conn, tmp)
+		this.Login(name, conn, tmp)
 	case "uploadImg":
+		this.uploadImg(name, conn, tmp, IMG_TYPE_STREAMING)
 	}
 }
 
-func (this *DeviceServer) Login(conn *websocket.Conn, data []byte) {
+func (this *DeviceServer) requestStreaming(conn *websocket.Conn) {
+	req := &RequestImg{Cmd: "requestImg"}
+	data, _ := json.Marshal(req)
+	conn.WriteMessage(websocket.TextMessage, data)
+}
+func (this *DeviceServer) Login(name string, conn *websocket.Conn, data []byte) {
 	gDeviceServer.M.Lock()
 	defer gDeviceServer.M.Unlock()
 
 	req := &Login{}
 	json.Unmarshal(data, req)
 
+	//server assign a random name to client
+	req.Name = name
 	gDeviceServer.Devices[req.Name] = conn
 }
 
-func (this *DeviceServer) uploadImg(conn *websocket.Conn, data []byte) {
+func (this *DeviceServer) uploadImg(name string, conn *websocket.Conn, data []byte, imgType int) {
 	var err error
 	if this.RemoteConn == nil {
 		log.Printf("remote server not connected")
@@ -139,7 +159,11 @@ func (this *DeviceServer) uploadImg(conn *websocket.Conn, data []byte) {
 	}
 
 	//send cmd to remote server
-	msg := &UploadImgToRemote{Cmd: "Img", ImgData: req.Data}
+	var msg *UploadImgToRemote
+	if imgType == IMG_TYPE_STREAMING {
+		msg = &UploadImgToRemote{Cmd: "Img", ImgData: req.Data, Name: name}
+	}
+
 	remoteData, _ := json.Marshal(msg)
 
 	_, err = this.RemoteConn.Write(remoteData)

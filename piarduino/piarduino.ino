@@ -30,6 +30,7 @@ void loop()
   if (buttonState == LOW) {
     return;
   }
+  delay(5000);
   /*
    memset(data,0,sizeof(data));
    strcpy(data,"hi");
@@ -39,34 +40,30 @@ void loop()
    delay(1000);
 */
 
-  int sensorValue = digitalRead(PIR_MOTION_SENSOR);
-  if(sensorValue == HIGH)//if the sensor value is HIGH?
-  {
-    //pir on
-    Serial.println("p1");
-    digitalWrite(VIBRATION_PIN, HIGH);
-    
-    for (int j=0;j<3;j++) {
-      for(int i=0;i<=10;i++) {
-        bar.setLevel(i);
+  while(1) {
+    int sensorValue = digitalRead(PIR_MOTION_SENSOR);
+    if(sensorValue == HIGH)//if the sensor value is HIGH?
+    {
+      //pir on
+      Serial.println("p1");
+      digitalWrite(VIBRATION_PIN, HIGH);
+      
+      for (int j=0;j<3;j++) {
+        for(int i=0;i<=10;i++) {
+          bar.setLevel(i);
+          delay(100);
+        }
+        bar.setBits(0x3ff);
         delay(100);
       }
-      bar.setBits(0x3ff);
-      delay(100);
-    }
-    
-    
-    digitalWrite(VIBRATION_PIN, LOW);
-    delay(1000);
-    
-     buttonState = LOW;
+      
+      
+      digitalWrite(VIBRATION_PIN, LOW);
+      delay(1000);
+      
+      buttonState = LOW;
+    } 
   }
-  else
-  {
-    //pir off
-   Serial.println("p0");
-  }
- 
 }
 
 

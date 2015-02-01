@@ -75,11 +75,10 @@ class ViewController: UIViewController,UIImagePickerControllerDelegate, UINaviga
     
     
     @IBAction func onClick(sender: AnyObject) {
-        
-
-        captureImage();
+        captureImage(0);
     }
-    func captureImage() {
+    
+    func captureImage(reqType: Int) {
         println("capturing image")
         if captureSession.canAddOutput(stillImageOutput) {
             captureSession.addOutput(stillImageOutput)
@@ -90,6 +89,7 @@ class ViewController: UIViewController,UIImagePickerControllerDelegate, UINaviga
         }
         
         var client = self.client
+        var parent = self
         
         self.stillImageOutput.captureStillImageAsynchronouslyFromConnection(
             self.stillImageOutput.connectionWithMediaType(AVMediaTypeVideo),completionHandler: {
@@ -99,17 +99,17 @@ class ViewController: UIViewController,UIImagePickerControllerDelegate, UINaviga
                 }
                 else if imageDataSampleBuffer != nil{
                     var imageData: NSData = AVCaptureStillImageOutput.jpegStillImageNSDataRepresentation(imageDataSampleBuffer?)
-                    var image: UIImage! = UIImage(data: imageData)
-                    println(image.size)
+//                    var image: UIImage! = UIImage(data: imageData)
+  //                  println(image.size)
                     
                     //720,1280
                     //self.imgView2?.image = image
                     let base64String = imageData.base64EncodedStringWithOptions(NSDataBase64EncodingOptions.allZeros)
                     
-                    var json:JSON = ["cmd":"uploadImg", "data": base64String]
-                    client.socket.writeData(json.rawData()!)
-
-
+                    if reqType == 0 {
+                        var json:JSON = ["cmd":"uploadImg", "data": base64String]
+                        client.socket.writeData(json.rawData()!)
+                    }                   
                 }
             }
         )
