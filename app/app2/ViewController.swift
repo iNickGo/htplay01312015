@@ -6,23 +6,66 @@
 //  Copyright (c) 2015 na. All rights reserved.
 //
 
+//reference: https://github.com/bradley/iOSSwiftOpenGLCamera/blob/master/iOSSwiftOpenGLCamera/CameraSessionController.swift
+
+
 import UIKit
 import Foundation
 import MobileCoreServices
+import AVFoundation
+import SwiftyJSON
 
 class ViewController: UIViewController,UIImagePickerControllerDelegate, UINavigationControllerDelegate  {
     let client : Client = Client.sharedInstance
     
     @IBOutlet var imgView: UIImageView?
     @IBOutlet var btn: UIButton?
+    @IBOutlet var imgView2: UIImageView?
+    
+    var sessionQueue: dispatch_queue_t!
     
     var cameraUI: UIImagePickerController! = UIImagePickerController()
+    
+    let captureSession = AVCaptureSession()
+    var previewLayer : AVCaptureVideoPreviewLayer?
+    var captureDevice : AVCaptureDevice?
+    var stillImageOutput: AVCaptureStillImageOutput!
+    
     
     override func viewDidLoad() {
         super.viewDidLoad()
         
         client.view = self
-        //        client.connect()
+        client.connect()
+        
+        
+        
+        sessionQueue = dispatch_queue_create("CameraSessionController Session", DISPATCH_QUEUE_SERIAL)
+        
+        
+        stillImageOutput = AVCaptureStillImageOutput()
+        stillImageOutput.outputSettings = [AVVideoCodecKey: AVVideoCodecJPEG]
+        
+        
+    //
+        captureSession.sessionPreset = AVCaptureSessionPresetHigh
+        
+        let devices = AVCaptureDevice.devices()
+        
+        // Loop through all the capture devices on this phone
+        for device in devices {
+            // Make sure this particular device supports video
+            if (device.hasMediaType(AVMediaTypeVideo)) {
+                // Finally check the position and confirm we've got the back camera
+                if(device.position == AVCaptureDevicePosition.Front) {
+                    captureDevice = device as? AVCaptureDevice
+                    if captureDevice != nil {
+                        println("Capture device found")
+                        beginSession()
+                    }
+                }
+            }
+        }
     }
     
     override func didReceiveMemoryWarning() {
@@ -32,53 +75,63 @@ class ViewController: UIViewController,UIImagePickerControllerDelegate, UINaviga
     
     
     @IBAction func onClick(sender: AnyObject) {
-        self.presentCamera()
-    }
-    
-    func presentCamera()
-    {
-        
-        if UIImagePickerController.isSourceTypeAvailable(UIImagePickerControllerSourceType.Camera)
-        {
-            cameraUI = UIImagePickerController()
-            cameraUI.delegate = self
-            cameraUI.sourceType = UIImagePickerControllerSourceType.Camera;
-            cameraUI.mediaTypes = [kUTTypeImage]
-            cameraUI.allowsEditing = false
-            cameraUI.cameraDevice = UIImagePickerControllerCameraDevice.Front
-            
-            self.presentViewController(cameraUI, animated: true, completion: nil)
-        }
-    }
-    
-    func imagePickerController(picker:UIImagePickerController!, didFinishPickingMediaWithInfo info:NSDictionary)
-    {
-        if(picker.sourceType == UIImagePickerControllerSourceType.Camera)
-        {
-            var image: UIImage = info.objectForKey(UIImagePickerControllerOriginalImage) as UIImage
-            var size = CGSizeMake(100, 300)             //default size
-            
-            //swift style, XDD
-            if var imgViewSize = imgView?.image {
-                size = imgViewSize.size
-            }
-            
-            var newImg = RBResizeImage(image, targetSize: size)
-            var data  = UIImageJPEGRepresentation(newImg, 50)
-            
-            let base64String = data.base64EncodedStringWithOptions(NSDataBase64EncodingOptions.allZeros)
-            
-            
-            //client.uploadImg(base64String, skill: skill)
-            
-            if var img = imgView? {
-                img.image = image
-            }
-            
-            self.dismissViewControllerAnimated(true, completion: nil)
+        if captureSession.canAddOutput(stillImageOutput) {
+            captureSession.addOutput(stillImageOutput)
         }
         
+
+        captureImage();
     }
+    func captureImage() {
+        if  stillImageOutput == nil {
+            return
+        }
+        
+        var client = self.client
+        
+        self.stillImageOutput.captureStillImageAsynchronouslyFromConnection(
+            self.stillImageOutput.connectionWithMediaType(AVMediaTypeVideo),completionHandler: {
+                (imageDataSampleBuffer: CMSampleBuffer?, error: NSError?) -> Void in
+                if imageDataSampleBuffer  == nil || error != nil {
+                    return
+                }
+                else if imageDataSampleBuffer != nil{
+                    var imageData: NSData = AVCaptureStillImageOutput.jpegStillImageNSDataRepresentation(imageDataSampleBuffer?)
+                    var image: UIImage! = UIImage(data: imageData)
+                    println(image.size)
+                    
+                    //720,1280
+                    //self.imgView2?.image = image
+                    let base64String = imageData.base64EncodedStringWithOptions(NSDataBase64EncodingOptions.allZeros)
+                    
+                    var json:JSON = ["cmd":"uploadImg", "data": base64String]
+                    client.socket.writeData(json.rawData()!)
+
+
+                }
+            }
+        )
+    }
+    
+    
+    
+    func beginSession() {
+        
+        var err : NSError? = nil
+        captureSession.addInput(AVCaptureDeviceInput(device: captureDevice, error: &err))
+        
+        if err != nil {
+            println("error: \(err?.localizedDescription)")
+        }
+        
+        previewLayer = AVCaptureVideoPreviewLayer(session: captureSession)
+        self.view.layer.addSublayer(previewLayer)
+        if var oview = self.imgView  {
+            previewLayer?.frame = oview.layer.frame
+            captureSession.startRunning()
+        }
+    }
+
     
     func RBResizeImage(image: UIImage, targetSize: CGSize) -> UIImage {
         let size = image.size

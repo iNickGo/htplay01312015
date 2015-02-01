@@ -14,7 +14,7 @@ import CoreLocation
 private let _SingletonASharedInstance = Client()
 
 
-let serverUrl = "192.168.0.103:8000/device"
+let serverUrl = "192.168.1.106:8000"
 
 class Client: NSObject, WebSocketDelegate{
     class var sharedInstance : Client {
@@ -23,7 +23,7 @@ class Client: NSObject, WebSocketDelegate{
     
    
     var view: AnyObject? = nil
-    var socket = WebSocket(url: NSURL(scheme: "ws", host: serverUrl, path: "/")!)
+    var socket = WebSocket(url: NSURL(scheme: "ws", host: serverUrl, path: "/device")!)
     var img: String = ""
     var connected: Bool = false
     
@@ -50,11 +50,14 @@ class Client: NSObject, WebSocketDelegate{
         println("got message \(from) \(msg)")
         
         var viewController = self.view as ViewController
-//        viewController.recvMsgFrom(from, msg:msg)
     }
   
     func websocketDidConnect(socket: Starscream.WebSocket) {
         println("connected")
+        
+        var json:JSON = ["cmd":"login", "name": "a iphone"]
+        socket.writeData(json.rawData()!)
+        
     }
     
     func websocketDidDisconnect(socket: Starscream.WebSocket, error: NSError?) {
@@ -68,15 +71,7 @@ class Client: NSObject, WebSocketDelegate{
         switch json["cmd"].stringValue {
         case "requestImg":
             var view = self.view as ViewController
-//            view.imgView?.image
-            if var imgView = view.imgView {
-                var imageData = UIImagePNGRepresentation(imgView.image)
-                let base64String = imageData.base64EncodedStringWithOptions(.allZeros)
-                
-                var json:JSON = ["cmd":"uploadImg", "data": base64String]
-                socket.writeData(json.rawData()!)
-            }
-
+            view.captureImage()
             
         default:
             print("n/a")
